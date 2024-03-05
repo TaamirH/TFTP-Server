@@ -13,8 +13,8 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     @Override
     public void process(byte[] message) {
-        // TODO implement this
-        throw new UnsupportedOperationException("Unimplemented method 'process'");
+        // if (!shouldTerminate())
+
     }
 
     @Override
