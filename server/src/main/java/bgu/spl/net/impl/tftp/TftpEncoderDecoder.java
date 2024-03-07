@@ -22,9 +22,7 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
         } else if (currentStage == 1) {
             currentOpcode = nextByte;
             currentStage = 2;
-            if (isClientToServerOpcode(currentOpcode)) {
-                return popString();
-            }
+
         } else if (nextByte == 0 && currentStage == 2) {
             if (isClientToServerOpcode(currentOpcode)) {
                 return popString();

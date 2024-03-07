@@ -21,8 +21,7 @@ public class TftpProtocol implements BidiMessagingProtocol<byte[]>  {
 
     @Override
     public void process(byte[] message) {
-        // if (!shouldTerminate())
-
+           // TODO Auto-generated method stub 
     }
 
     @Override
