@@ -10,45 +10,54 @@ public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
     private static final int MAX_BUFFER_SIZE = 1024;
     private static final String CHARSET = StandardCharsets.UTF_8.name();
 
-    private int currentOpcode = 0;
-    private int currentStage = 0;
+    private int opCode = 0;
     private final byte[] buffer = new byte[MAX_BUFFER_SIZE];
-    private int currentIndex = 0;
+    private int nextIndex = 0;
+    private byte case3 ;
+    private short countdown=-1;
 
     @Override
     public byte[] decodeNextByte(byte nextByte) {
-        if (nextByte == 0 && currentStage == 0) {
-            currentStage = 1;
-        } else if (currentStage == 1) {
-            currentOpcode = nextByte;
-            currentStage = 2;
-
-        } else if (nextByte == 0 && currentStage == 2) {
-            if (isClientToServerOpcode(currentOpcode)) {
+        write(nextByte);
+         if (nextIndex == 2) {
+            opCode = nextByte;
+            if (opCode==6 || opCode==10){
                 return popString();
             }
+        } else if (opCode==4 && nextIndex==4){
+            return popString();
+        } else if (opCode==3 && nextIndex==3){
+            case3 = nextByte;
+        } else if (opCode==3 && nextIndex==4){
+            countdown = (short) (((short) case3) << 8 | (short) (nextByte));
+        }
+        if (nextByte==0 && nextIndex>1){
+        if (opCode==7 ||opCode==8 ||opCode==1 ||opCode==2 ||opCode==6)
+            return popString();
+        if(opCode==5 && nextIndex>4)    
+            return popString();
+        if(opCode==9 && nextIndex>3)    
+            return popString();
+        }
+        if (opCode==3 && countdown==0){
+            return popString();
         }
         return null;
     }
-    private boolean isClientToServerOpcode(int opcode) {
-        return opcode >= 1 && opcode <= 10;
+    private void write(byte nextByte){
+        buffer[nextIndex]= nextByte;
+        if (opCode==3 && countdown>0){
+            countdown--;
+        }
+        nextIndex++;
     }
 
  private byte[] popString() {
-        currentOpcode = 0;
-        currentStage = 0;
-        currentIndex = 0;
-        return Arrays.copyOfRange(buffer, 0, currentIndex);
+        opCode = 0;
+        nextIndex = 0;
+        countdown=-1;
+        return Arrays.copyOfRange(buffer, 0, nextIndex);
     }
-
-
-    // private void pushByte(Byte nextByte) {
-    //     if (currentIndex >= buffer.length) {
-    //         throw new RuntimeException("Buffer overflow during decoding");
-    //     }
-    //     buffer[currentIndex++] = nextByte;
-    // }
-
 
     @Override
     public byte[] encode(byte[] message) {
