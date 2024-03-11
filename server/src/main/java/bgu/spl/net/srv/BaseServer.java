@@ -2,12 +2,10 @@ package bgu.spl.net.srv;
 
 import bgu.spl.net.api.BidiMessagingProtocol;
 import bgu.spl.net.api.MessageEncoderDecoder;
-import bgu.spl.net.api.MessagingProtocol;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.function.Supplier;
-import bgu.spl.net.impl.tftp.ConnectionsImp;
 
 public abstract class BaseServer<T> implements Server<T> {
 
@@ -15,13 +13,14 @@ public abstract class BaseServer<T> implements Server<T> {
     private final Supplier<BidiMessagingProtocol<T>> protocolFactory;
     private final Supplier<MessageEncoderDecoder<T>> encdecFactory;
     private ServerSocket sock;
-    private final Connections<T> connections;
+    private final ConnectionsImpl<T> connections;
+    int counter =0;
 
     public BaseServer(
             int port,
             Supplier<BidiMessagingProtocol<T>> protocolFactory,
             Supplier<MessageEncoderDecoder<T>> encdecFactory,
-            Connections<T> connections) {
+            ConnectionsImpl<T> connections) {
 
         this.port = port;
         this.protocolFactory = protocolFactory;
@@ -32,35 +31,38 @@ public abstract class BaseServer<T> implements Server<T> {
 
     @Override
     public void serve() {
-
         try (ServerSocket serverSock = new ServerSocket(port)) {
-			System.out.println("Server started");
-
-            this.sock = serverSock; //just to be able to close
-
-            while (!Thread.currentThread().isInterrupted()) {
-
-                Socket clientSock = serverSock.accept();
-
-                BlockingConnectionHandler<T> handler = new BlockingConnectionHandler<>(
-                        clientSock,
-                        encdecFactory.get(),
-                        protocolFactory.get());
-
-                execute(handler);
-            }
-        } catch (IOException ex) {
-        }
-
+          System.out.println("Server started");
+    
+          this.sock = serverSock; //just to be able to close
+    
+          while (!Thread.currentThread().isInterrupted()) {
+            Socket clientSock = serverSock.accept();
+    
+            BlockingConnectionHandler<T> handler = new BlockingConnectionHandler<>(
+              clientSock,
+              encdecFactory.get(),
+              protocolFactory.get(),
+              counter
+            );
+            connections.connect(counter, handler);
+            handler.start(counter, connections);
+            counter++;
+            execute(handler);
+          }
+        } catch (IOException ex) {}
+    
         System.out.println("server closed!!!");
+        try {
+          close();
+        } catch (IOException e) {}
+      }
+    
+      @Override
+      public void close() throws IOException {
+        if (sock != null) sock.close();
+      }
+    
+      protected abstract void execute(BlockingConnectionHandler<T> handler);
     }
-
-    @Override
-    public void close() throws IOException {
-		if (sock != null)
-			sock.close();
-    }
-
-    protected abstract void execute(BlockingConnectionHandler<T>  handler);
-
-}
+    
