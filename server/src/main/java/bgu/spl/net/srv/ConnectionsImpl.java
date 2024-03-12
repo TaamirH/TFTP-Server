@@ -17,7 +17,6 @@ public class ConnectionsImpl<T> implements Connections<T> {
     connections = new ConcurrentHashMap<>();
     userSessions = new ConcurrentHashMap<>();
     lock = new ReentrantReadWriteLock();
-
   }
 
   @Override
@@ -54,10 +53,10 @@ public class ConnectionsImpl<T> implements Connections<T> {
     return connections.get(connectionId);
   }
 
-public void bCast(int connectionId, T msg) {
+public void broadcast(int connectionId, T msg) {
     for (Map.Entry<Integer, BlockingConnectionHandler<T>> entry : connections.entrySet()) {
-        int conId = entry.getKey();
-        if (conId != connectionId) {
+        int newId = entry.getKey();
+        if (newId != connectionId) {
             BlockingConnectionHandler<T> handler = entry.getValue();
             handler.send(msg);
         }

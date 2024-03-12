@@ -1,94 +1,91 @@
 package bgu.spl.net.impl.tftp;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 import bgu.spl.net.api.MessageEncoderDecoder;
 
 public class TftpEncoderDecoder implements MessageEncoderDecoder<byte[]> {
-    private static final int MAX_BUFFER_SIZE = 1024;
-    private static final String CHARSET = StandardCharsets.UTF_8.name();
 
-    private int opCode = 0;
-    private final byte[] buffer = new byte[MAX_BUFFER_SIZE];
-    private int nextIndex = 0;
-    private byte case3 ;
-    private short countdown=-1;
+  private byte[] bytes = new byte[1 << 10]; //start with 1k
+  private int len = 0;
+  private short opCode;
 
-    @Override
-    public byte[] decodeNextByte(byte nextByte) {
-        write(nextByte);
-         if (nextIndex == 2) {
-            opCode = nextByte;
-            if (opCode==6 || opCode==10){
-                return popString();
-            }
-        } else if (opCode==4 && nextIndex==4){
-            return popString();
-        } else if (opCode==3 && nextIndex==3){
-            case3 = nextByte;
-        } else if (opCode==3 && nextIndex==4){
-            countdown = (short) (((short) case3) << 8 | (short) (nextByte));
+  @Override
+  public byte[] decodeNextByte(byte nextByte) {
+    byte[] bytesToReturn;
+    if (len < 2) { 
+      bytes[len] = nextByte;
+      len++;
+      if (len == 2) { 
+        opCode =
+          (short) (((short) bytes[0] & 0xff) << 8 | (short) (bytes[1] & 0xff));
+        if(opCode==6 || opCode == 10){
+          bytesToReturn=Arrays.copyOfRange(bytes, 0, len);
+          bytes=new byte[1 << 10];
+          len=0;
+          return bytesToReturn;
         }
-        if (nextByte==0 && nextIndex>1){
-        if (opCode==7 ||opCode==8 ||opCode==1 ||opCode==2 ||opCode==6)
-            return popString();
-        if(opCode==5 && nextIndex>4)    
-            return popString();
-        if(opCode==9 && nextIndex>3)    
-            return popString();
+      }
+    } else { 
+      if (
+        opCode == 1 || //Read request
+        opCode == 2 || //Write request
+        opCode == 5 || //Error
+        opCode == 7 || //Login request
+        opCode == 8 //Delete file request
+      ) {
+        if (nextByte == 0) {
+          bytesToReturn=Arrays.copyOfRange(bytes, 0, len);
+          bytes=new byte[1 << 10];
+          len=0;
+          return bytesToReturn;
         }
-        if (opCode==3 && countdown==0){
-            return popString();
+        bytes[len] = nextByte;
+        len++;
+      }
+      if (opCode == 4) {
+        bytes[len] = nextByte;
+        len++;
+        if (len == 4) {
+          bytesToReturn=Arrays.copyOfRange(bytes, 0, len);
+          bytes=new byte[1 << 10];
+          len=0;
+          return bytesToReturn;
         }
-        return null;
-    }
-    private void write(byte nextByte){
-        buffer[nextIndex]= nextByte;
-        if (opCode==3 && countdown>0){
-            countdown--;
+      }
+      if (opCode == 3) { // Data
+        bytes[len] = nextByte;
+        len++;
+
+        if (len >= 6) {
+          short packetSize = (short) (
+            ((short) bytes[2]) << 8 | (short) (bytes[3] & 0xff)
+          );
+          if (len == 6 + packetSize) {
+            bytesToReturn=Arrays.copyOfRange(bytes, 0, len);
+            bytes=new byte[1 << 10];
+            len=0;
+            return bytesToReturn;
+          }
         }
-        nextIndex++;
+      }
+      if (opCode == 9) { // BCAST
+        if (nextByte == 0 && len != 2) {
+          bytesToReturn=Arrays.copyOfRange(bytes, 0, len);
+          bytes=new byte[1 << 10];
+          len=0;
+          return bytesToReturn;
+        }
+        bytes[len] = nextByte;
+        len++;
+      }
     }
 
- private byte[] popString() {
-        opCode = 0;
-        nextIndex = 0;
-        countdown=-1;
-        return Arrays.copyOfRange(buffer, 0, nextIndex);
-    }
+    return null;
+  }
 
-    @Override
-    public byte[] encode(byte[] message) {
-        return message;
-    }
-                    
-    private String getOpcodeName(int opcode) {
-        switch (opcode) {
-            case 1:
-                return "RRQ (Read Request)";
-            case 2:
-                return "WRQ (Write Request)";
-            case 3:
-                return "DATA (Data)";
-            case 4:
-                return "ACK (Acknowledgement)";
-            case 5:
-                return "ERROR (Error)";
-            case 6:
-                return "DIRQ (Directory Listing Request)";
-            case 7:
-                return "LOGRQ (Login Request)";
-            case 8:
-                return "DELRQ (Delete File Request)";
-            case 9:
-                return "BCAST (Broadcast File)";
-            case 10:
-                return "DISC (Disconnect)";
-            default:
-                return "Unknown Opcode: " + opcode;
-        }
-    }
-    
+  @Override
+  public byte[] encode(byte[] message) {
+    return message;
+  }
 }
